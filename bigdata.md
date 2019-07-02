@@ -163,7 +163,92 @@
             **JobAnalysisService.java中只解除启动收集服务的注解**
             **然后运行EduInsightServer.java启动服务**
 
-3. 数据清洗
+3. 数据清洗 
+
+	>主要是通过JobCleanService.java process()方法和完成JobCleanUtils代码来完成清洗
+
+	- 书写process方法
+		```java
+			/**
+		* 具体的实现。
+		*/
+		public synchronized ServiceState process() {
+			try {
+				isTaskDone.set(false);
+				// 清洗数据
+				logger.info("清洗数据开始");
+				//清洗所有互联网信息			
+				jobDataReposity.cleanJobData();
+				//进行岗位分类保存
+				String table = hbaseclassify.getProperty("hbasetable");//分类
+				String[] strArray = null;
+				strArray = table.split(",");
+				String JsonContext = ReadFile
+						.ReadFile(System.getProperty("user.dir") + "/configuration/hbaseclassify.json");
+				JSONObject jsonObject;
+				jsonObject = new JSONObject(JsonContext);
+				//如何根据名称先分大类
+				for (int i = 0; i < strArray.length; i++) {
+					JSONArray jsonArray = jsonObject.getJSONArray(strArray[i]);
+					//对保存的数据进行分类统计IT
+					//	[{"name":"云计算"},{"name":"cloud"},{"name":"openstack"},{"name":"kvm"},{"name":"vmware"},{"name":"ceph"},{"name":"sdn"},{"name":"云"},{"name":"阿里云"},{"name":"腾讯云"},{"name":"云存储"}]
+					jobDataReposity.classify(jsonArray, "job_" + strArray[i], strArray[i]);
+				}
+			
+			} catch (Exception e) {
+				logger.error(e.toString());
+			}
+			finally {
+				isTaskDone.set(true);
+			}
+			logger.info("清洗数据结束");
+			return ServiceState.STATE_RUNNING;
+		}
+		```
+		**该方法是对具体的数据进行分类**
+	- 书写cleanJobData方法
+
+		```java
+		/** 
+		* @Title: ${cleanEducation} 
+		* @Description: ${清洗工作学历}
+		* @param ${scale：爬取的工作学历}  
+		* @return ${清洗过的工作学历}
+		* @throws 
+		*/
+		public static String cleanEducation(String education) {
+			String[] edu = educations.getProperty("education").split(",");
+			for (int i = 0; i < edu.length; i++) {
+				if (education.contains(edu[i]))
+					return edu[i];
+			}
+			return "";
+		}
+		```
+		**该方法是具体对学历的清洗操作**
+	- 启动服务
+  
+		```java
+		@Override
+		public ServiceState start() {
+
+			//1. 启动收集服务（虫）
+			//Service jobCollector = new JobCollectService(server, this);
+			//jobCollector.start();
+			// 2. 启动清洗服务（清洗）
+			Service jobCleaner = new JobCleanService(server, this);
+			jobCleaner.start();
+			// 3. 启动分析服务（聚类）
+			//Service jobCluster = new JobClusterService(server, this);
+			//jobCluster.start();
+			return ServiceState.STATE_RUNNING;
+		}
+		```
+	**JobAnalysisService.java中只解除启动收集服务的注解**
+	**然后运行EduInsightServer.java启动服务**
+
+
+
 4. 岗位聚类
 5. 岗位推荐
 
